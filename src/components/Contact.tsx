@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, useState } from "react";
 import {
@@ -9,6 +9,8 @@ import {
   FaGithub,
   FaLinkedin,
   FaPaperPlane,
+  FaCheckCircle,
+  FaExclamationCircle,
 } from "react-icons/fa";
 
 const contactInfo = [
@@ -51,17 +53,47 @@ export default function Contact() {
     email: "",
     subject: "",
     message: "",
+    website: "", // honeypot
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [status, setStatus] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate form submission
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    alert("Thank you for your message! I'll get back to you soon.");
-    setFormData({ name: "", email: "", subject: "", message: "" });
-    setIsSubmitting(false);
+    setStatus(null);
+
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || "Could not send your message.");
+      }
+
+      setStatus({
+        type: "success",
+        message: "Thanks for reaching out! I'll get back to you soon.",
+      });
+      setFormData({ name: "", email: "", subject: "", message: "", website: "" });
+    } catch (err) {
+      setStatus({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Something went wrong. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (
@@ -181,6 +213,18 @@ export default function Contact() {
               onSubmit={handleSubmit}
               className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800"
             >
+              {/* Honeypot — hidden from humans, catches bots */}
+              <input
+                type="text"
+                name="website"
+                value={formData.website}
+                onChange={handleChange}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="absolute w-px h-px opacity-0 -z-10 pointer-events-none"
+              />
+
               <div className="grid sm:grid-cols-2 gap-6 mb-6">
                 <div>
                   <label
@@ -277,6 +321,31 @@ export default function Contact() {
                   </>
                 )}
               </motion.button>
+
+              {/* Status message */}
+              <AnimatePresence>
+                {status && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    role="status"
+                    aria-live="polite"
+                    className={`mt-4 flex items-center gap-2 text-sm rounded-xl px-4 py-3 border ${
+                      status.type === "success"
+                        ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"
+                        : "text-red-300 bg-red-500/10 border-red-500/30"
+                    }`}
+                  >
+                    {status.type === "success" ? (
+                      <FaCheckCircle className="shrink-0" />
+                    ) : (
+                      <FaExclamationCircle className="shrink-0" />
+                    )}
+                    {status.message}
+                  </motion.p>
+                )}
+              </AnimatePresence>
             </form>
           </motion.div>
         </div>
